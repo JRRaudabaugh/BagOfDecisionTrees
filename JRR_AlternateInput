@@ -1,0 +1,206 @@
+import java.util.*;
+import java.io.*;
+
+
+
+public class ReadInData {
+	private HashMap<Integer, HashMap<String, Boolean>> traits;
+	private HashMap<Integer, HashMap<Integer, String>> discreteTraits;
+	private HashMap<String, Integer> classification;
+	private ArrayList<HashMap<Integer, HashMap<Integer, Double>>> datasets;
+	private HashMap<Integer, HashMap<Integer, Double>> outOfBagSet;
+	public ReadInData(String dataFileName, String classificationFileName, String traitFileName) throws Exception{
+		classification = new HashMap<String, Integer>();
+		traits = new HashMap<Integer, HashMap<String, Boolean>>();
+		datasets = new ArrayList<HashMap<Integer, HashMap<Integer, Double>>>();
+		outOfBagSet = new HashMap<Integer, HashMap<Integer, Double>>();
+		discreteTraits = new HashMap<Integer, HashMap<Integer, String>> ();
+		buildTraits(traitFileName);
+		buildClassifier(classificationFileName);
+		build(dataFileName);
+		
+	}
+	/**
+	 * builds classification hashmap from tree...
+	 * @param classificationFileName
+	 * @throws Exception
+	 */
+	private void buildClassifier(String classificationFileName) throws Exception {
+		BufferedReader br = new BufferedReader(new FileReader("C:\\Users\\Joey\\workspace\\ReadLargeFile\\src\\"+classificationFileName));
+		String line = null;
+		while((line = br.readLine()) != null){
+			String[] classes = line.split(",");
+			for(int i = 0; i < classes.length; i++){
+				String classifyAs = classes[i];
+				classification.put(classifyAs, new Integer(i+1));
+			}
+		}
+		br.close();
+		System.out.println("Classifications Built");
+	}
+	/**
+	 * reads in the traits file Traits are stored in a HashMap<ColumnNumber,HashMap<TraitName, boolean(isContinuous)>>
+	 * Logs discrete attributes into the discrete traits hashmap as well.
+	 * @param traitFileName
+	 * @throws Exception
+	 */
+	private void buildTraits(String traitFileName) throws Exception {
+		BufferedReader br = new BufferedReader(new FileReader("C:\\Users\\Joey\\workspace\\ReadLargeFile\\src\\"+traitFileName));
+		String line = null;
+		int i = 0;
+		while((line = br.readLine()) != null){
+			String[] classes = line.split(": ");
+			String traitName = classes[0];
+			String typeOfTrait = classes [1];
+			HashMap<String, Boolean> temp = new HashMap<String, Boolean>();
+			if(typeOfTrait.toString() == "continuous."){
+				temp.put(traitName, new Boolean(true));
+				traits.put(new Integer(i+1), temp);
+			}
+			else{
+				temp.put(traitName, new Boolean(false));
+				traits.put(new Integer(i+1), temp);
+				discreteTraits.put(new Integer(i+1), new HashMap<Integer,String>());
+			}
+			i++;
+		}
+		br.close();
+		System.out.println("Traits Built");
+	}
+	/**
+	 * Loads each row into an ArrayList of strings and then feeds that arraylist to the data structure building method
+	 * @param filename
+	 * @throws Exception
+	 */
+	private void build(String filename) throws Exception {
+		BufferedReader br = new BufferedReader(new FileReader("C:\\Users\\Joey\\workspace\\ReadLargeFile\\src\\"+filename));
+		String line = null;
+		ArrayList<String> rows = new ArrayList<String>();
+		while((line = br.readLine()) != null){
+			rows.add(line);
+		}
+		br.close();
+		splitDataUp(rows);
+	}
+	
+	/**
+	 * parses the data AND splits it up appropriately between trees to be built or out of bag data
+	 * @param rows
+	 */
+	private void splitDataUp(ArrayList<String> rows) {
+		Collections.shuffle(rows);
+		int threshold = rows.size()/3;
+		Iterator<String> j = rows.iterator();
+		int count = 0;
+		Integer row = new Integer(1);
+		while(count < threshold){
+			String line = j.next();
+			HashMap<Integer, Double> rowData = new HashMap<Integer, Double>();
+			HashMap<Integer, HashMap<Integer, Double>> temp = null;
+			if(count < 200){
+				temp = new HashMap<Integer, HashMap<Integer, Double>>();
+				datasets.add(temp);
+			}
+			String[] parts = line.split(",");
+			Integer column = new Integer(1);
+			
+			for(int i = 0; i < parts.length; i++){
+				//loads classification only
+				if(i == parts.length -1){
+					String result = parts[i].substring(0, parts[i].length() -1);
+					rowData.put(column, new Double(classification.get(result)));
+					column++;
+					continue;
+				}
+				if(discreteTraits.containsKey(new Integer(column))){
+					String data = parts[i];
+					Integer swapValue = new Integer(discreteTraits.get(new Integer(column)).size());
+					HashMap<Integer, String> temp1 = discreteTraits.get(column);
+					temp1.put(swapValue, data);
+					discreteTraits.put(column, temp1);
+					rowData.put(column, new Double(swapValue));
+				}
+				else{
+					Double d = new Double(parts[i].toString());
+					rowData.put(column, d);
+					column++;
+				}
+			
+			}
+			//rowData.put(column,);
+			temp = datasets.get(count % 200);
+			temp.put(row, rowData);
+			datasets.set(count%200, temp);
+			row++;
+			count++;
+		}
+		System.out.println("Tree DataSets built");
+		while(j.hasNext()){
+			String line = j.next();
+			HashMap<Integer, Double> rowData = new HashMap<Integer, Double>();
+			String[] parts = line.split(",");
+			Integer column = new Integer(1);
+			
+			for(int i = 0; i < parts.length; i++){
+				//loads classification only
+				if(i == parts.length -1){
+					String result = parts[i].substring(0, parts[i].length() -1);
+					rowData.put(column, new Double(classification.get(result)));
+					column++;
+					continue;
+				}
+				if(discreteTraits.containsKey(new Integer(column))){
+					String data = parts[i];
+					Integer swapValue = new Integer(discreteTraits.get(new Integer(column)).size());
+					HashMap<Integer, String> temp1 = discreteTraits.get(column);
+					temp1.put(swapValue, data);
+					discreteTraits.put(column, temp1);
+					rowData.put(column, new Double(swapValue));
+				}
+				else{
+					Double d = new Double(parts[i].toString());
+					rowData.put(column, d);
+					column++;
+				}
+			
+			}
+			outOfBagSet.put(row, rowData);
+			row++;
+		}
+		System.out.println("Out of bag data complete.");
+	}
+	public HashMap<Integer, HashMap<String, Boolean>> getTraits() {
+		return traits;
+	}
+	public void setTraits(HashMap<Integer, HashMap<String, Boolean>> traits) {
+		this.traits = traits;
+	}
+	public HashMap<Integer, HashMap<Integer, String>> getDiscreteTraits() {
+		return discreteTraits;
+	}
+	public void setDiscreteTraits(
+			HashMap<Integer, HashMap<Integer, String>> discreteTraits) {
+		this.discreteTraits = discreteTraits;
+	}
+	public HashMap<String, Integer> getClassification() {
+		return classification;
+	}
+	public void setClassification(HashMap<String, Integer> classification) {
+		this.classification = classification;
+	}
+	public ArrayList<HashMap<Integer, HashMap<Integer, Double>>> getDatasets() {
+		return datasets;
+	}
+	public void setDatasets(
+			ArrayList<HashMap<Integer, HashMap<Integer, Double>>> datasets) {
+		this.datasets = datasets;
+	}
+	public HashMap<Integer, HashMap<Integer, Double>> getOutOfBagSet() {
+		return outOfBagSet;
+	}
+	public void setOutOfBagSet(
+			HashMap<Integer, HashMap<Integer, Double>> outOfBagSet) {
+		this.outOfBagSet = outOfBagSet;
+	}
+	
+}
